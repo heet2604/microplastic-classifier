@@ -6,6 +6,7 @@ from ultralytics import YOLO
 from PIL import Image, ImageTk
 import sys
 
+
 class ObjectDetectionApp:
     def __init__(self, root):
         self.root = root
@@ -13,6 +14,7 @@ class ObjectDetectionApp:
         self.root.configure(bg="#222222")  # Set background color to dark gray
 
         self.output_text = None
+        self.total_objects_label = None  # Label to display the total number of objects detected
 
         self.home_page()
 
@@ -28,11 +30,8 @@ class ObjectDetectionApp:
         # Initialize your custom YOLO model
         self.model = YOLO(self.MODEL_WEIGHTS_PATH)
 
-        # Redirect stdout and stderr to the text widget
-        self.text_redirector = None  # Initialize text_redirector attribute
-
     def home_page(self):
-        self.home_label = tk.Label(self.root, text="Welcome to Object Detection App", font=("Arial", 24, "bold italic"),
+        self.home_label = tk.Label(self.root, text="Microplastic Classifier", font=("Arial", 24, "bold italic"),
                                    bg="#222222", fg="white")
         self.home_label.pack(pady=(50, 20))  # Add padding above and below the heading
 
@@ -49,13 +48,6 @@ class ObjectDetectionApp:
 
         self.output_text = tk.Text(self.root, height=10, width=50, bg="#333333", fg="white")
         self.output_text.pack()
-
-        # Create TextRedirector instance after output_text has been initialized
-        self.text_redirector = self.TextRedirector(self.output_text)
-
-        # Redirect stdout and stderr to the text widget
-        sys.stdout = self.text_redirector
-        sys.stderr = self.text_redirector
 
     def predict_color(self):
         self.clear_widgets()
@@ -95,6 +87,9 @@ class ObjectDetectionApp:
             # Display the detected image to the user
             self.display_image(output_image_path, prediction_type)
 
+            # Update the total number of objects label
+            self.count_objects(results)
+
     def display_image(self, image_path, prediction_type):
         # Load the image using PIL
         image = Image.open(image_path)
@@ -111,13 +106,21 @@ class ObjectDetectionApp:
         self.home_button = tk.Button(self.root, text="Home", command=self.home_page, bg="#333333", fg="white")
         self.home_button.pack()
 
-    class TextRedirector:
-        def __init__(self, text_widget):
-            self.text_widget = text_widget
+    def count_objects(self, results):
+        # Count the total number of objects detected
+        total_objects = sum(len(result) for result in results)
 
-        def write(self, str):
-            self.text_widget.insert("end", str)
-            self.text_widget.see("end")
+        # Update the total number of objects label
+        self.update_total_objects_label(total_objects)
+
+    def update_total_objects_label(self, total_objects):
+        if self.total_objects_label:
+            self.total_objects_label.destroy()
+
+        self.total_objects_label = tk.Label(self.root, text=f"Total Objects Detected: {total_objects}",
+                                            bg="#222222", fg="white")
+        self.total_objects_label.pack()
+
 
 def main():
     root = tk.Tk()
@@ -135,6 +138,7 @@ def main():
 
     app = ObjectDetectionApp(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()
