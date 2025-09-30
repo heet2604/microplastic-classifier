@@ -77,3 +77,12 @@ tzdata==2024.1
 ultralytics==8.1.30
 urllib3==2.2.1
 watchdog==4.0.0
+streamlit==1.28.0
+pandas==2.0.3
+numpy==1.24.3
+opencv-python==4.8.0
+torch==2.0.1
+torchvision==0.15.2
+pillow==10.0.0
+prometheus-client==0.17.1
+requests==2.31.0

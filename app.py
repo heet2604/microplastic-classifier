@@ -1,6 +1,7 @@
 # Python In-built packages
 from pathlib import Path
 import PIL
+import time
 
 # External packages
 import streamlit as st
@@ -8,6 +9,37 @@ import streamlit as st
 # Local Modules
 import settings
 import helper
+
+# Prometheus Metrics (Conditional import)
+try:
+    from prometheus_client import start_http_server, Counter, Histogram, Gauge
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    print("Prometheus client not available, continuing without metrics")
+
+# Initialize Prometheus metrics
+if PROMETHEUS_AVAILABLE:
+    try:
+        start_http_server(8000)
+        REQUEST_COUNT = Counter('app_requests_total', 'Total app requests')
+        DETECTION_COUNT = Counter('detections_total', 'Total microplastic detections')
+        REQUEST_DURATION = Histogram('app_request_duration_seconds', 'Request latency')
+        ACTIVE_USERS = Gauge('app_active_users', 'Active users')
+        APP_START_TIME = Gauge('app_start_time', 'Application start time')
+        APP_START_TIME.set_to_current_time()
+    except Exception as e:
+        print(f"Failed to start Prometheus server: {e}")
+        PROMETHEUS_AVAILABLE = False
+
+# Track detection function
+def track_detection(count=1):
+    if PROMETHEUS_AVAILABLE:
+        DETECTION_COUNT.inc(count)
+
+def track_request():
+    if PROMETHEUS_AVAILABLE:
+        REQUEST_COUNT.inc()
 
 # Setting page layout
 st.set_page_config(
@@ -20,6 +52,12 @@ st.set_page_config(
 # Main page heading
 st.title("Microplastic detection using YOLOv8")
 
+# Show Prometheus status
+if PROMETHEUS_AVAILABLE:
+    st.sidebar.success("✅ Monitoring enabled (Port 8000)")
+else:
+    st.sidebar.warning("⚠️ Monitoring disabled")
+
 # Sidebar
 st.sidebar.header("ML Model Config")
 
@@ -29,6 +67,10 @@ model_type = st.sidebar.radio(
 
 confidence = float(st.sidebar.slider(
     "Select Model Confidence", 25, 100, 40)) / 100
+
+# Track sidebar interactions
+if PROMETHEUS_AVAILABLE:
+    ACTIVE_USERS.inc()
 
 # Selecting Detection Or Segmentation
 if model_type == 'color':
@@ -83,26 +125,40 @@ if source_radio == settings.IMAGE:
                      use_column_width=True)
         else:
             if st.sidebar.button('Detect Objects'):
-                res = model.predict(uploaded_image,
-                                    conf=confidence
-                                    )
+                # Track the request
+                track_request()
+                
+                start_time = time.time()
+                res = model.predict(uploaded_image, conf=confidence)
+                detection_time = time.time() - start_time
+                
+                if PROMETHEUS_AVAILABLE:
+                    REQUEST_DURATION.observe(detection_time)
+                
                 boxes = res[0].boxes
                 res_plotted = res[0].plot()[:, :, ::-1]
                 st.image(res_plotted, caption='Detected Image',
                          use_column_width=True)
+                
                 try:
                     with st.expander("Detection Results"):
                         for box in boxes:
                             st.write(box.data)
                 except Exception as ex:
-                    # st.write(ex)
                     st.write("No image is uploaded yet!")
                 
-                # Increment the total detected objects count
-                total_detected_objects_count += len(boxes)
+                # Track detections and update count
+                detection_count = len(boxes)
+                total_detected_objects_count += detection_count
+                track_detection(detection_count)
+                
+                # Show detection metrics
+                st.sidebar.metric("Detection Time", f"{detection_time:.2f}s")
+                st.sidebar.metric("Objects Detected", detection_count)
 
 # Display the total number of detected objects
-st.sidebar.write(f"Total number of detected objects: {total_detected_objects_count}")
+st.sidebar.header("Detection Summary")
+st.sidebar.write(f"**Total objects detected:** {total_detected_objects_count}")
 
 if source_radio == settings.VIDEO:
     helper.play_stored_video(confidence, model)
@@ -116,5 +172,11 @@ elif source_radio == settings.RTSP:
 elif source_radio == settings.YOUTUBE:
     helper.play_youtube_video(confidence, model)
 
-#else:
-    #st.error("Please select a valid source type!")
+# Add a simple health check endpoint for Docker
+def health_check():
+    return {"status": "healthy", "timestamp": time.time()}
+
+# This won't interfere with Streamlit but provides a health endpoint
+if __name__ == "__main__":
+    # This is just for documentation - Streamlit handles the main execution
+    pass
