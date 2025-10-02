@@ -47,3 +47,9 @@ ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 EXPOSE 8501
 
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Copy and set up startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Use the startup script as entrypoint
+CMD ["/app/start.sh"]
